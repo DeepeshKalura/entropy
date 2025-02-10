@@ -1,79 +1,93 @@
+import datetime
 import random
 import click
-@click.command()
+from sqlalchemy import func
+from src.engine import Session
+from src.models import Hobby, WannaBe, Work
+from uuid import uuid4
+
+
+session = Session()
+
+@click.group()
 def main():
-
-    regular_task_list = [
-
-    "Going to gym",
-    "Caring Yourself"
-    ]
+    """Entropy CLI - Manage hobbies, tasks, and goals"""
+    pass
 
 
+@click.command()
+@click.argument("category", type=click.Choice(["hobby", "wanna_be", "work", "goal"]))
+@click.argument("name")
+@click.argument("description")
+def add(category, name, description):
+    """Add an entry to the selected category"""
+    if category == "hobby":
+        entry = Hobby(name=name, description=description)
+    elif category == "wanna_be":
+        entry = WannaBe(name=name, description=description)
+    elif category == "work":
+        entry = Work(name=name, description=description)
+    else:
+        click.echo("Invalid category")
+        return
 
-    wanna_deepesh_list = [
-    "Cleaner Deepesh", 
-    "Space Explorer Deepesh",
-    "Foddy Deepesh",
-    "Traver Deepesh",
-    "Anime Deepesh",
-    "Sports Deepesh",
-    "Runner Deepesh",
-    "Speaker Deepesh",
-    "Money Manager Deepesh",
-    "Writer Deepesh",
-    "Handsome Deepesh",
-    ]
-
-    task_deepesh = [
-    "sister",
-    "orca",
-    "delicious",
-    "interview-prep",
-    "shadana",
-    "potpie",
-    ]
-#TODO: Future task
-    wanna_be_task = [
-    "learning-backend",
-    "friend-time",
-    "system-desing",
-    "mother-walking"
-    ]   
-
-    quote_task = [
-    "kidness",
-    "words"
-    ]
-
-    number_of_task = 2
-
-    quote_task_result = random.choice(quote_task)
-
-    if (quote_task_result == "words"):
-        print("Never go back from your words")
-
-    elif (quote_task_result == "kidness"):
-        print("Today is alone time")
-
-# majar task 
-
-    task_deepesh_result = random.choice(task_deepesh)
-
-    print(f"solve the issue of this task {task_deepesh_result} and move to next task")
+    session.add(entry)
+    session.commit()
+    click.echo(f"Added {name} to {category}")
 
 
-# diplomatic task
+@click.command()
+def task():
+    """Pick a random open task"""
+    categories = [ "wanna_be", "work"]
+    category = random.choice(categories)
 
-    result = random.randint(1, number_of_task)
+    task = session.query(Hobby).order_by(func.random()).first()
 
-    if (result == 1):
-        task_deepesh_result = random.choice(task_deepesh)
-        print(f"this is diplomatic task {task_deepesh_result} no code just help and gather information")
-    else: 
-        task_wanna_deepesh_result = random.choice(wanna_deepesh_list)
+    number:int = random.randint(4, 15)
+    date = datetime.datetime.now() + datetime.timedelta(days=number)
 
-        print(f"this day diplomatic task { task_wanna_deepesh_result} complete and you will be wanna be deepesh")
+    click.secho(f"📅 On {date.strftime('%d-%m-%Y')}, your whole day is dedicated to: {task.name}", fg="green", bold=True)
+
+    if category == "wanna_be":
+        task = session.query(WannaBe).order_by(func.random()).first()
+        click.secho(f"\n💼 Wanna Be: {task.name}", fg="cyan", bold=True)
+
+        
+        category= random.choice(categories)
+        if category == "work":
+            task = session.query(Work).order_by(func.random()).first()
+            click.secho(f"\n🚀 Diplomatic Work: {task.name}", fg="yellow", bold=True)
+
+        else:
+            task = session.query(WannaBe).order_by(func.random()).first()
+            click.secho(f"\n🚀 Diplomatic Wanna be: {task.name}", fg="yellow", bold=True)
+            
+    elif category == "work":
+
+        task = session.query(Work).order_by(func.random()).first()
+        click.secho(f"\n💼 Work: {task.name}", fg="cyan", bold=True)
+
+
+        random.shuffle(categories)
+        category = random.choice(categories)
+
+        if category == "wanna_be":
+            task = session.query(WannaBe).order_by(func.random()).first()
+            click.secho(f"\n🚀 Diplomatic Wanna Be: {task.name}", fg="yellow", bold=True)
+
+        else:
+
+            task = session.query(Work).order_by(func.random()).first()
+            click.secho(f"\n🚀 Diplomatic Wanna: {task.name}", fg="yellow", bold=True)
+
+
+
+
+main.add_command(add)
+main.add_command(task)
+
 
 if __name__ == "__main__":
     main()
+    

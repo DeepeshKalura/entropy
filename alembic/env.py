@@ -31,7 +31,6 @@ target_metadata = target_metadata
 if ( os.getenv("SQL_LITE_URL") == None):
     exit(-1)
 else:
-    print("SQL_LITE_URL: ", os.getenv("SQL_LITE_URL"))
     config.set_main_option("sqlalchemy.url", os.getenv("SQL_LITE_URL"))
 
 def run_migrations_offline() -> None:
