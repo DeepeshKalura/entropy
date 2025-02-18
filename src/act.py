@@ -12,7 +12,6 @@ session = Session()
 @click.group()
 def main():
     """Entropy CLI - Manage hobbies, tasks, and goals"""
-    pass
 
 
 @click.command()
