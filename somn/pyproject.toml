@@ -1,0 +1,25 @@
+[project]
+name = "somn"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "DeepeshKalura", email = "deepeshkalurs@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.2.2",
+    "ollama>=0.4.7",
+    "pynput>=1.7.7",
+    "sounddevice>=0.5.1",
+    "soundfile>=0.13.1",
+    "torch>=2.6.0",
+    "transformers>=4.48.3",
+]
+
+[project.scripts]
+somn = "somn.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

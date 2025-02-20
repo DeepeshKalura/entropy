@@ -21,17 +21,19 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 from src import engine
+
 target_metadata = engine.Base.metadata
-target_metadata = target_metadata 
+target_metadata = target_metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-if ( os.getenv("SQL_LITE_URL") == None):
+if os.getenv("SQL_LITE_URL") is None:
     exit(-1)
 else:
     config.set_main_option("sqlalchemy.url", os.getenv("SQL_LITE_URL"))
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
@@ -71,9 +73,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
