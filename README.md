@@ -1,5 +1,9 @@
 # Entropy 
 
-Entropy is a personal project in which i have diffuilties to choose the task and what do to things. So, I want to choose task at radnom with all my hobbies and strickly follow that format.
+Entropy will be gateway for the person development growth and management. It created the goals from their we get different work and based on them
+I can create actionable task and side task.
 
-That why i created this project.
+## Somn 
+Somn will be a part of the entropy which will be voice based LLM and uses the custom AI models on run-time which can executed entropy and manage my personal
+task
+
