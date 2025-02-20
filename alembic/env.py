@@ -29,7 +29,7 @@ target_metadata = target_metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-if os.getenv("SQL_LITE_URL") == None:
+if os.getenv("SQL_LITE_URL") is None:
     exit(-1)
 else:
     config.set_main_option("sqlalchemy.url", os.getenv("SQL_LITE_URL"))
