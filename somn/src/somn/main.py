@@ -1,13 +1,10 @@
 from pynput import keyboard
 import ollama
 import queue
-import sys
 import sounddevice as sd
 import soundfile as sf
 from transformers import pipeline
 import numpy as np
-import threading
-import time
 
 
 class VoiceAssistant:
