@@ -4,25 +4,21 @@ it is the entry points for the cli which is creating with
 `click` package.
 
 """
-
+import os
+import uuid
 from pathlib import Path
 import time
 from typing import Optional
 import importlib.metadata
 import click
 from rich.table import Table
-from rich.layout import Layout
-from rich.text import Text
 from rich.markdown import Markdown
-from rich.box import SIMPLE
+from rich.box import SIMPLE, ROUNDED
+from sqlalchemy import or_
 from src.animations_manager import AnimationManager
-from src.models import (
-    Task,
-    User,
-    CharacterStatistics,
-    UserTitle,
-)
+from src.models import Task, User, Work
 from src.utility import (
+    NotesPath,
     Status,
     calculate_level,
     create_progress_bar,
@@ -147,79 +143,163 @@ def version():
     console.print(f"🎮 PARTH v-{ver}", style="bold green")
 
 
-@main.command()
-def stats():
-    """Shows stats about the master"""
+@main.group()
+def admin():
+    """This admin command let you add works currently"""
 
-    # Mock ID for demonstration
-    id: str = "9c3b7aed6c18407a9bea3d162c4eeaa0"
 
-    # Get data from database
-    user = session.query(User).filter_by(id=id).first()
-    character_stats = session.query(CharacterStatistics).filter_by(user_id=id).first()
-    user_titles = session.query(UserTitle).filter_by(user_id=id).all()
-
-    # Create layout
-    layout = Layout()
-    layout.split_column(
-        Layout(name="header"), Layout(name="main"), Layout(name="footer")
+@admin.command(name="work")
+@click.argument("name")
+def add_work(name: str):
+    """Add a new work"""
+    id = str(uuid.uuid4())
+    description = console.input(
+        f"[bold green]Enter a description for {name}: [/bold green]"
     )
-    layout["main"].split_row(Layout(name="stats"), Layout(name="skills"))
+    repo_url = console.input("[bold green]Enter the github repo URL: [/bold green]")
+    created_resources = []
+    try:
+        path = os.path.join(NotesPath.tag_path(), f"{name}.md")
+        if not os.path.exists(path):
+            with open(path, "w") as f:
+                f.write(f"# {name}\n{description}")
+        created_resources.append(("file", path))
 
-    # Header with master info
-    header_text = Text()
-    header_text.append(f"\n{user.name}", style="bold cyan")
-    header_text.append(f" - Level {user.xp // 100}", style="yellow")
-    header_text.append(f"\nPath: {user.path}", style="blue")
-    header_text.append(
-        f"\nHeight: {user.height}cm | Weight: {user.weight}kg", style="dim"
-    )
-    if user.description:
-        header_text.append(f"\n{user.description}", style="italic")
-
-    # Create stats table
-    stats_table = Table(
-        title=f"{user.name} Statistics", show_header=False, border_style="bright_blue"
-    )
-    stats_table.add_column("Stat", style="cyan")
-    stats_table.add_column("Value", justify="right")
-
-    stats_mapping = {
-        "Strength": character_stats.strength,
-        "Agility": character_stats.agility,
-        "Dexterity": character_stats.dexterity,
-        "Intellect": character_stats.intellect,
-        "Speed": character_stats.speed,
-        "Charisma": character_stats.charisma,
-        "Luck": character_stats.luck,
-        "Movement": character_stats.movement,
-        "Stamina": character_stats.stamina,
-        "Perception": character_stats.perception,
-    }
-
-    for stat, value in stats_mapping.items():
-        bar = "█" * (value // 2) + "░" * (50 - value // 2)
-        stats_table.add_row(stat, f"{value} {bar}")
-
-    # Create titles panel
-    titles_text = Text()
-    for i, title in enumerate(user_titles):
-        titles_text.append(
-            f"[{title.title_id}]", style=("bold cyan" if i == 0 else "dim")
+        work = Work(
+            id=id, name=name, description=description, path=path, repo_url=repo_url
         )
-        if i < len(user_titles) - 1:
-            titles_text.append(" • ")
+        try:
+            session.add(work)
+            session.commit()
+            console.print(
+                "[bold green]✓ Work has been created successfully![/bold green]"
+            )
+        except Exception as db_error:
+            session.rollback()
+            raise db_error
 
-    # Combine all elements
-    # console.print(Panel(header_text, title="Master Profile", border_style="cyan"))
-    console.print(stats_table)
-    # console.print(Panel(titles_text, title="Earned Titles", border_style="yellow"))
+    except Exception as e:
+        # Rollback and clean up created resources
+        for resource_type, resource_id in created_resources:
+            if resource_type == "file" and os.path.exists(resource_id):
+                try:
+                    os.remove(resource_id)
+                except Exception as cleanup_error:
+                    console.print(
+                        f"[bold red]Failed to clean up file {resource_id}: {cleanup_error}[/bold red]"
+                    )
 
-    console.print(
-        f"\nMaster created: {user.create_at.strftime('%Y-%m-%d %H:%M:%S')}",
-        style="dim",
-        justify="right",
-    )
+            elif resource_type == "db_record":
+                try:
+                    session.query(Work).filter(Work.id == resource_id).delete()
+                    session.commit()
+                except Exception as cleanup_error:
+                    console.print(
+                        f"[bold red]Failed to clean up database record {resource_id}: {cleanup_error}[/bold red]"
+                    )
+
+        console.print(f"[bold red]Error creating work item: {e}[/bold red]")
+
+
+@admin.command(name="view")
+@click.option("--filter", "-f", help="Filter works by name or description")
+@click.option(
+    "--sort",
+    "-s",
+    type=click.Choice(["name", "create_at", "update_at"]),
+    default="create_at",
+    help="Sort works by field",
+)
+@click.option("--desc", is_flag=True, help="Sort in descending order")
+def view_work(filter, sort, desc):
+    """View all work items in a formatted table."""
+    try:
+        query = session.query(Work)
+
+        # Apply filter if provided
+        if filter:
+            query = query.filter(
+                or_(
+                    Work.name.ilike(f"%{filter}%"),
+                    Work.description.ilike(f"%{filter}%"),
+                )
+            )
+
+        # Apply sorting
+        order_column = getattr(Work, sort)
+        if desc:
+            query = query.order_by(order_column.desc())
+        else:
+            query = query.order_by(order_column)
+
+        works = query.all()
+
+        if not works:
+            console.print("[yellow]No work items found.[/yellow]")
+            return
+
+        # Create a rich table with wider repository column
+        table = Table(show_header=True, header_style="bold blue", box=ROUNDED)
+        table.add_column("Name", style="cyan", width=20)
+        table.add_column("Description", style="green", width=40)
+        table.add_column("Repository", style="magenta", width=40)
+        table.add_column("Created", style="yellow", width=16)
+        table.add_column("Updated", style="yellow", width=16)
+
+        for work in works:
+            # Format dates nicely
+            created = (
+                work.create_at.strftime("%Y-%m-%d %H:%M") if work.create_at else "N/A"
+            )
+            updated = (
+                work.update_at.strftime("%Y-%m-%d %H:%M") if work.update_at else "N/A"
+            )
+
+            # Extract username/repo from GitHub URL
+            repo_display = work.repo_url
+            if "github.com" in repo_display:
+                try:
+                    # Extract username/repo from GitHub URL
+                    url_parts = repo_display.split("github.com/")
+                    if len(url_parts) > 1:
+                        # Get username/repo part and remove .git if present
+                        repo_display = url_parts[1].rstrip("/").replace(".git", "")
+                except Exception:
+                    # If parsing fails, use fallback truncation
+                    if len(repo_display) > 38:
+                        repo_display = repo_display[:35] + "..."
+            else:
+                # For non-GitHub URLs, use regular truncation but with higher limit
+                if len(repo_display) > 38:
+                    repo_display = repo_display[:35] + "..."
+
+            # Truncate description if too long
+            desc_display = work.description
+            if desc_display and len(desc_display) > 50:
+                desc_display = desc_display[:47] + "..."
+
+            table.add_row(
+                work.name,
+                desc_display or "No description",
+                repo_display,
+                created,
+                updated,
+            )
+
+        # Add summary
+        console.print(f"\n[bold green]Work Items[/bold green] - {len(works)} total")
+        if filter:
+            console.print(f"[italic]Filtered by: {filter}[/italic]")
+        console.print(table)
+
+        # Add interaction hints
+        console.print(
+            "\n[dim]Tip: Use --filter/-f to search, --sort/-s to change sorting, --desc for descending order[/dim]"
+        )
+        console.print("[dim]Example: view --filter project --sort name --desc[/dim]\n")
+
+    except Exception as e:
+        console.print(f"[bold red]Error viewing work items: {e}[/bold red]")
 
 
 @main.group()
@@ -253,6 +333,83 @@ def create_random_task():
             f"This time is {quest.name}, use view to see more details",
             style="Bold Yellow",
         )
+
+
+@admin.command(name="delete")
+@click.argument("name", required=True)
+@click.option("--force", "-f", is_flag=True, help="Delete without confirmation")
+def delete_work(name, force):
+    """Delete a work item by name.
+
+    This will remove the work item from the database and optionally delete the associated file.
+    """
+    try:
+        # Find the work item
+        work = session.query(Work).filter(Work.name == name).first()
+
+        if not work:
+            console.print(
+                f"[bold red]Error:[/bold red] No work item found with name '{name}'"
+            )
+            return
+
+        # Show work details before deletion
+        console.print("\n[bold]Work item details:[/bold]")
+        console.print(f"  [cyan]Name:[/cyan] {work.name}")
+        console.print(
+            f"  [cyan]Description:[/cyan] {work.description or 'No description'}"
+        )
+        console.print(f"  [cyan]Repository:[/cyan] {work.repo_url}")
+        console.print(f"  [cyan]File path:[/cyan] {work.path}")
+        console.print(
+            f"  [cyan]Created:[/cyan] {work.create_at.strftime('%Y-%m-%d %H:%M') if work.create_at else 'N/A'}"
+        )
+
+        # Get confirmation unless force flag is used
+        if not force:
+            confirmation = console.input(
+                "\n[bold red]Are you sure you want to delete this work item? (y/n): [/bold red]"
+            ).lower()
+
+            if confirmation != "y" and confirmation != "yes":
+                console.print("[yellow]Deletion cancelled.[/yellow]")
+                return
+
+        # Track what was deleted for reporting
+        deleted_items = []
+
+        # Delete the file if it exists
+        if work.path and os.path.exists(work.path):
+            try:
+                os.remove(work.path)
+                deleted_items.append("file")
+            except Exception as file_error:
+                console.print(
+                    f"[bold red]Warning:[/bold red] Failed to delete file: {file_error}"
+                )
+
+        # Delete from database
+        try:
+            session.delete(work)
+            session.commit()
+            deleted_items.append("database record")
+        except Exception as db_error:
+            session.rollback()
+            console.print(
+                f"[bold red]Error:[/bold red] Failed to delete from database: {db_error}"
+            )
+            return
+
+        # Show success message
+        success_message = (
+            f"[bold green]Successfully deleted[/bold green] work item '{name}'"
+        )
+        if deleted_items:
+            success_message += f" ({', '.join(deleted_items)})"
+        console.print(success_message)
+
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
 
 
 @main.command(name="view")
@@ -439,6 +596,7 @@ def mark_task_completed():
 
 
 main.add_command(guild)
+main.add_command(admin)
 
 if __name__ == "__main__":
     main()

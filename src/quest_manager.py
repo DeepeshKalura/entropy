@@ -11,12 +11,12 @@ import uuid
 
 from sqlalchemy import select
 from src.models import Quest, Task, User, Work
-from src.utility import session, Status, QuestStatus, user_id
+from src.utility import session, Status, QuestStatus, user_id, NotesPath
 
 
 class QuestManager:
     def __init__(self):
-        self.base_path = "/home/deepesh/Documents/adventure/1-rough-work"
+        self.base_path = NotesPath.rough_path()
         self.required_completion_rate = 0.10
 
     def ensure_directory_exists(self, path) -> None:
