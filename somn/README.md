@@ -1,1 +1,0 @@
-Somn is a foundational package designed for efficient communication with Ollama and enhanced audio functionalities, ensuring high performance and reliability.
