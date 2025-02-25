@@ -1,4 +1,6 @@
 import math
+import os
+from pathlib import Path
 from rich.console import Console
 from rich.text import Text
 from src.engine import Session
@@ -59,3 +61,17 @@ session = Session()
 
 
 user_id: str = "9c3b7aed6c18407a9bea3d162c4eeaa0"
+
+
+class NotesPath:
+    @staticmethod
+    def tag_path():
+        return os.path.join(Path.home(), "Documents/adventure/3-tags")
+
+    @staticmethod
+    def rough_path():
+        return os.path.join(Path.home(), "Documents/adventure/1-rough-work")
+
+    @staticmethod
+    def note_path():
+        return os.path.join(Path.home(), "Documents/adventure/6-notes")
