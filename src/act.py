@@ -4,7 +4,6 @@ it is the entry points for the cli which is creating with
 `click` package.
 
 """
-
 import os
 import uuid
 from pathlib import Path
@@ -172,6 +171,13 @@ def view_quest():
         minutes_left = (time_left.seconds % 3600) // 60
         seconds_left = time_left.seconds % 60
 
+        if(days_left < 0 ):
+            questManager.closing_counter(quest=quest)
+            console.print("Time's up! The quest has expired.", style="bold red")
+            console.print("Go to guild to get new quest", style="bold green" )
+            return
+            
+
         console.print(
             f"Time remaining: {days_left} days, {hours_left} hours, {minutes_left} minutes, {seconds_left} seconds",
             style="red",
@@ -188,8 +194,6 @@ def view_quest():
         status_color_map = {
             Status.pending: "yellow",
             Status.started: "bright_blue",
-            Status.aborted: "bold red",
-            Status.in_progress: "blue",
             Status.completed: "green",
             Status.failure: "red",
         }

@@ -138,7 +138,7 @@ class QuestManager:
     ):
         """Create the markdown file for the task"""
         self.ensure_directory_exists(os.path.dirname(quest_path))
-        template = self.quest_template(list_of_work, expiry_date)
+        template = self.quest_template( list_work_name=list_of_work, expiry_date=expiry_date)
         with open(quest_path, "w") as f:
             f.write(template)
 
@@ -148,6 +148,42 @@ class QuestManager:
         if not active_quest:
             print("No active quest found")
             return None
+
+    def closing_counter(self, quest: Quest):
+        try:
+            # Get all tasks for the quest
+            tasks = session.query(Task).filter(Task.quest_id == quest.id).all()
+            total_tasks = len(tasks)
+
+            # Update status of incomplete tasks
+            for task in tasks:
+                if task.status in [Status.started, Status.pending]:
+                    task.status = Status.failure
+
+            completed_tasks = (
+                session.query(Task)
+                .filter(
+                    Task.quest_id == quest.id,
+                    Task.status == Status.completed,
+                )
+                .count()
+            )
+
+            completion_rate = completed_tasks / total_tasks if total_tasks > 0 else 0
+            
+            users = session.query(User).filter(User.id == user_id).first()
+            if completion_rate >= quest.required_completion_rate:
+                quest.status = QuestStatus.completed
+                users.xp += 100
+            else:
+                quest.status = QuestStatus.failed 
+                users.xp -= 150
+
+            session.commit()
+            
+        except Exception as e:
+            session.rollback()
+            print(f"Error in closing counter: {str(e)}")
 
     def generate(self) -> Optional[Quest]:
         """Main entry point for managing quests and tasks"""
@@ -159,33 +195,8 @@ class QuestManager:
             if current_time <= active_quest.expiry_date:
                 return active_quest
             else:
-                total_tasks = (
-                    session.query(Task).filter(Task.quest_id == active_quest.id).count()
-                )
-                completed_tasks = (
-                    session.query(Task)
-                    .filter(
-                        Task.quest_id == active_quest.id,
-                        Task.status == Status.completed,
-                    )
-                    .count()
-                )
-
-                completion_rate = (
-                    completed_tasks / total_tasks if total_tasks > 0 else 0
-                )
-
-                users = session.query(User).filter(User.id == user_id).first()
-                if completion_rate >= active_quest.required_completion_rate:
-                    active_quest.status = QuestStatus.completed
-
-                    users.xp += 100
-                else:
-                    # Quest failed due to insufficient completion
-                    active_quest.status = QuestStatus.failed
-                    users.xp -= 150
-
-                session.commit()
+                print("your quest time is up, we are sending your request to closing counter")
+                self.closing_counter(active_quest)
 
         days = random.randint(3, 8)
         return self.create_quest(days_to_complete=days)
