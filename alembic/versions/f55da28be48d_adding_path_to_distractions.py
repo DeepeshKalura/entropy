@@ -30,7 +30,11 @@ def upgrade() -> None:
     # Get the appropriate path from utility
     conn.execute(
         text(
-            f"UPDATE distractions SET path = '{os.path.join(NotesPath.tag_path(), 'YouTube.md')}'"
+from typing import Sequence, Union
+import os
+from alembic import op
+
+# ... rest of the file unchanged
         )
     )
 
