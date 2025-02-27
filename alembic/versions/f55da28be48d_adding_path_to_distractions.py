@@ -24,15 +24,18 @@ def upgrade() -> None:
     op.add_column("distractions", Column("path", String(), nullable=True))
 
     conn = op.get_bind()
+    # Import path utilities
+    from src.utility import NotesPath
+
+    # Get the appropriate path from utility
     conn.execute(
         text(
-            "UPDATE distractions SET path = 'home/deepesh/Documents/adventure/3-tags/YouTube.md'"
+            f"UPDATE distractions SET path = '{os.path.join(NotesPath.tag_path(), 'YouTube.md')}'"
         )
     )
 
     with op.batch_alter_table("distractions") as batch_op:
         batch_op.alter_column("path", nullable=False)
-
 
 def downgrade() -> None:
     op.drop_column("distractions", "path")
