@@ -266,14 +266,16 @@ class QuestManager:
 
             new_event = TaskEvents(
                 id=event_id,
-                task_id=task.id,
-                user_id=user_id,  
-                start_time=start_time,
-                end_time=start_time,
-                event_type=event_type,
-                event_category=event_category,
-                notes=notes,
-            )
+new_event = TaskEvents(
+    id=event_id,
+    task_id=task.id,
+    user_id=user_id,  
+    start_time=start_time,
+    end_time=None,
+    event_type=event_type,
+    event_category=event_category,
+    notes=notes,
+)
 
             # Add to database
             session.add(new_event)
