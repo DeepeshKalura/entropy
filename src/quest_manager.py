@@ -306,11 +306,13 @@ class QuestManager:
             event.end_time = datetime.now()
 
             # If there are end notes, append them to the existing notes file
-            if end_note != None:
+            if end_notes is not None:
                 with open(path, "a") as f:
                     f.write(end_notes)
                     f.write("\n")
 
+                if event.notes is None:
+                    event.notes = ""
                 event.notes += f"\n{end_notes}"
             session.commit()
             return event
@@ -319,6 +321,5 @@ class QuestManager:
             session.rollback()
             print(f"Error ending event: {str(e)}")
             return None
-
 
 questManager = QuestManager()
