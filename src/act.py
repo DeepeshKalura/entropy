@@ -232,7 +232,7 @@ def add_new_event(notes: str):
         )
         return
 
-    last_task_event = questManager.task_event_exist()
+    last_task_event:Optional[TaskEvents] = questManager.task_event_exist()
 
     if last_task_event:
         last_notes = console.input(
@@ -242,8 +242,6 @@ def add_new_event(notes: str):
             event=last_task_event, path=quest.path, end_notes=last_notes
         )
 
-    new_task_event: Optional[TaskEvents]
-    # Display options for user selection
     console.print("\nSelect event type:")
     for idx, event_type in enumerate([EventType.work, EventType.distraction], 1):
         console.print(f"{idx}. {event_type}", style="Bold Cyan")
