@@ -91,5 +91,5 @@ class EventType:
 class TaskCategories:
     visual = "VISUAL"
     study = "STUDY"
-    diplomatic = "diplomatic"
+    diplomatic = "DIPLOMATIC"
     implementation = "IMPLEMENTATION"
