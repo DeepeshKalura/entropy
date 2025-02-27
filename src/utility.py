@@ -75,3 +75,21 @@ class NotesPath:
     @staticmethod
     def note_path():
         return os.path.join(Path.home(), "Documents/adventure/6-notes")
+
+
+class DistractionLevel:
+    high = "HIGH"
+    medium = "MEDIUM"
+    low = "LOW"
+
+
+class EventType:
+    work = "WORK"
+    distraction = "DISTRACTION"
+
+
+class TaskCategories:
+    visual = "VISUAL"
+    study = "STUDY"
+    diplomatic = "DIPLOMATIC"
+    implementation = "IMPLEMENTATION"
