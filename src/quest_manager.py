@@ -157,7 +157,7 @@ class QuestManager:
 
             # Update status of incomplete tasks
             for task in tasks:
-                if task.status in [Status.started]:
+                if task.status in [Status.started, Status.pending]:
                     task.status = Status.failure
 
             completed_tasks = (
