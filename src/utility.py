@@ -9,8 +9,6 @@ from src.engine import Session
 class Status:
     pending = "PENDING"
     started = "STARTED"
-    aborted = "ABORTED"
-    in_progress = "IN_PROGRESS"
     completed = "COMPLETED"
     failure = "FAILURE"
 
