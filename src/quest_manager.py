@@ -109,7 +109,7 @@ class QuestManager:
         tags = ""
 
         for work_name in list_work_name:
-            tags += f"[[{work_name}]]"
+            tags += f"[[{work_name.name}]]"
             tags += ", "
 
         """Create the markdown content for the task"""
