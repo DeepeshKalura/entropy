@@ -4,11 +4,12 @@ it is the entry points for the cli which is creating with
 `click` package.
 
 """
+
 import os
 import uuid
 from pathlib import Path
 import time
-from typing import Optional
+from typing import List, Optional
 import importlib.metadata
 import click
 from rich.table import Table
@@ -16,8 +17,9 @@ from rich.markdown import Markdown
 from rich.box import SIMPLE, ROUNDED
 from sqlalchemy import or_
 from src.animations_manager import AnimationManager
-from src.models import Task, User, Work
+from src.models import Task, TaskEvents, User, Work, Distractions
 from src.utility import (
+    DistractionLevel,
     NotesPath,
     Status,
     calculate_level,
@@ -25,6 +27,8 @@ from src.utility import (
     console,
     session,
     user_id,
+    EventType,
+    TaskCategories,
 )
 from src.quest_manager import questManager
 from datetime import datetime
@@ -143,12 +147,209 @@ def version():
     console.print(f"🎮 PARTH v-{ver}", style="bold green")
 
 
+@main.command(name="view")
+def view_quest():
+    """View all tasks"""
+    quest = questManager.get_active_quest()
+
+    if quest is None:
+        console.print(
+            "You've never visited the guild before, so you cannot view any quest yet.",
+            style="bold red",
+        )
+        console.print(
+            "Visit the quest store to start viewing and getting quests.",
+            style="bold green",
+        )
+    else:
+        tasks = session.query(Task).filter(Task.quest_id == quest.id).all()
+
+        console.print(quest.name, style="bold cyan")
+        console.print(f"Status: {quest.status}", style="green", end="      ")
+        time_left = quest.expiry_date - datetime.now()
+        days_left = time_left.days
+        hours_left = time_left.seconds // 3600
+        minutes_left = (time_left.seconds % 3600) // 60
+        seconds_left = time_left.seconds % 60
+
+        console.print(
+            f"Time remaining: {days_left} days, {hours_left} hours, {minutes_left} minutes, {seconds_left} seconds",
+            style="red",
+        )
+        console.print(f"Path: {quest.path}")
+        console.print()
+
+        table = Table(show_header=True, header_style="bold cyan", title="Quest")
+        table.add_column("ID")
+        table.add_column("Name")
+        table.add_column("Status")
+
+        # Define a mapping of status to style
+        status_color_map = {
+            Status.pending: "yellow",
+            Status.started: "bright_blue",
+            Status.aborted: "bold red",
+            Status.in_progress: "blue",
+            Status.completed: "green",
+            Status.failure: "red",
+        }
+
+        for current_task in tasks:
+            # Apply color based on the status of the current task
+            task_status_color = status_color_map.get(
+                current_task.status, "white"
+            )  # Default to white if no match
+            status_with_color = (
+                f"[{task_status_color}]{current_task.status}[/{task_status_color}]"
+            )
+
+            table.add_row(
+                current_task.id,
+                current_task.name,
+                status_with_color,
+            )
+
+        console.print(table)
+
+
+@main.command(name="event")
+@click.option("--notes", "-n", help="Additional notes for the event")
+def add_new_event(notes: str):
+    """Add a events for a given task"""
+
+    quest = questManager.get_active_quest()
+
+    if quest is None:
+        console.print("Please go to guild and get your quest first!", style="bold red")
+        return
+
+    task = questManager.started_task_of_quest(quest)
+
+    if task is None:
+        console.print(
+            "You didn't started any task from current quest. Go! dude take the task from quest",
+            style="bold red",
+        )
+        return
+
+    last_task_event = questManager.task_event_exist()
+
+    if last_task_event:
+        last_notes = console.input(
+            "[bold green]Write about your last events? [/bold green]"
+        )
+        questManager.end_current_event(
+            event=last_task_event, path=quest.path, end_notes=last_notes
+        )
+
+    new_task_event: Optional[TaskEvents]
+    # Display options for user selection
+    console.print("\nSelect event type:")
+    for idx, event_type in enumerate([EventType.work, EventType.distraction], 1):
+        console.print(f"{idx}. {event_type}", style="Bold Cyan")
+
+    # Get user selection
+    choice = console.input("\n[bold green]Enter number (1 or 2): [/bold green]")
+
+    try:
+        selected_idx = int(choice) - 1
+        if selected_idx in [0, 1]:
+            selected_event = [EventType.work, EventType.distraction][selected_idx]
+
+            if selected_event == EventType.work:
+                console.print("Select event type: ", end=" ")
+                for idx, event_type in enumerate(
+                    [
+                        TaskCategories.visual,
+                        TaskCategories.study,
+                        TaskCategories.diplomatic,
+                        TaskCategories.implementation,
+                    ],
+                    1,
+                ):
+                    console.print(f"{idx}. {event_type}", style="Cyan")
+
+                choice = console.input(
+                    "\n[bold green]Enter number (1, 2 etc): [/bold green]"
+                )
+
+                selected_idx = int(choice) - 1
+
+                if selected_idx in [0, 1, 2, 3]:
+                    selected_event_category = [
+                        TaskCategories.visual,
+                        TaskCategories.study,
+                        TaskCategories.diplomatic,
+                        TaskCategories.implementation,
+                    ][selected_idx]
+                    questManager.add_new_event(
+                        task=task,
+                        event_type=selected_event,
+                        event_category=selected_event_category,
+                        notes=notes,
+                    )
+                    console.print(
+                        "[bold green]New event has been introduced![/bold green]"
+                    )
+
+            elif selected_event == EventType.distraction:
+                list_of_distraction: List[Distractions] = session.query(
+                    Distractions
+                ).all()
+
+                console.print("Select distraction:")
+                for idx, distraction in enumerate(list_of_distraction, 1):
+                    level_color = (
+                        "red"
+                        if distraction.level_of_distraction == DistractionLevel.high
+                        else "yellow"
+                        if distraction.level_of_distraction == DistractionLevel.medium
+                        else "green"
+                    )
+                    console.print(
+                        f"{idx}. {distraction.name} [{level_color}]({distraction.level_of_distraction})[/{level_color}]"
+                    )
+
+                choice = console.input("\n[bold green]Enter number: [/bold green]")
+                try:
+                    selected_idx = int(choice) - 1
+                    if 0 <= selected_idx < len(list_of_distraction):
+                        selected_distraction = list_of_distraction[selected_idx]
+                        questManager.add_new_event(
+                            task=task,
+                            event_type=selected_event,
+                            event_category=selected_distraction.name,
+                            notes=notes,
+                        )
+                        console.print(
+                            "[bold green]New distraction event has been recorded![/bold green]"
+                        )
+                    else:
+                        console.print("[bold red]Invalid selection.[/bold red]")
+                except ValueError:
+                    console.print("[bold red]Please enter a valid number.[/bold red]")
+            else:
+                pass
+
+        else:
+            console.print("[bold red]Invalid choice. Please select 1 or 2.[/bold red]")
+            return
+    except ValueError:
+        console.print("[bold red]Please enter a valid number.[/bold red]")
+        return
+
+
 @main.group()
 def admin():
     """This admin command let you add works currently"""
 
 
-@admin.command(name="work")
+@admin.group()
+def work():
+    """The things which brings towards your goal"""
+
+
+@work.command(name="add")
 @click.argument("name")
 def add_work(name: str):
     """Add a new work"""
@@ -201,7 +402,7 @@ def add_work(name: str):
         console.print(f"[bold red]Error creating work item: {e}[/bold red]")
 
 
-@admin.command(name="view")
+@work.command(name="view")
 @click.option("--filter", "-f", help="Filter works by name or description")
 @click.option(
     "--sort",
@@ -302,40 +503,7 @@ def view_work(filter, sort, desc):
         console.print(f"[bold red]Error viewing work items: {e}[/bold red]")
 
 
-@main.group()
-def guild():
-    """
-    Control the task objects.
-
-    This group command aggregates functionality related to managing tasks within
-    the application.
-    """
-
-
-@guild.command(name="quest")
-def create_random_task():
-    """Pick a random open task"""
-
-    quest = questManager.get_active_quest()
-    if quest is None:
-        quest = questManager.generate()
-
-        if not quest:
-            console.print("Damn! raise the github issue!", style="Bold Red")
-        else:
-            console.print(
-                f"Your {quest.name} is this, use view to see more details",
-                style="Bold Cyan",
-            )
-
-    else:
-        console.print(
-            f"This time is {quest.name}, use view to see more details",
-            style="Bold Yellow",
-        )
-
-
-@admin.command(name="delete")
+@work.command(name="delete")
 @click.argument("name", required=True)
 @click.option("--force", "-f", is_flag=True, help="Delete without confirmation")
 def delete_work(name, force):
@@ -412,65 +580,132 @@ def delete_work(name, force):
         console.print(f"[bold red]Error:[/bold red] {e}")
 
 
-@main.command(name="view")
-def view_quest():
-    """View all tasks"""
+@admin.group()
+def distraction():
+    """Things which pure wasteful for time"""
+
+
+@distraction.command(name="add")
+@click.option("--name", prompt="Distraction name", help="Name of the distraction")
+@click.option(
+    "--description", prompt="Description", help="Description of the distraction"
+)
+@click.option(
+    "--level",
+    prompt="Level of distraction",
+    type=click.Choice(
+        [DistractionLevel.low, DistractionLevel.medium, DistractionLevel.high],
+        case_sensitive=False,
+    ),
+    help="How distracting is this item (LOW, MEDIUM, HIGH)",
+)
+def create_distraction(name, description, level):
+    """Create a new distraction record"""
+
+    path = NotesPath.tag_path() + f"/{name}.md"
+
+    # Create the file if it doesn't exist
+    if not os.path.exists(path):
+        with open(path, "w") as f:
+            f.write(f"# {name}\n\n{description}")
+
+    distraction = Distractions(
+        id=str(uuid.uuid4()),
+        name=name,
+        description=description,
+        path=path,
+        level_of_distraction=level,
+    )
+
+    session.add(distraction)
+    session.commit()
+
+    level_color = (
+        "red"
+        if level == DistractionLevel.high
+        else "yellow"
+        if level == DistractionLevel.medium
+        else "green"
+    )
+
+    console.print(
+        f"[green]Successfully created distraction:[/green] {name} with level [{level_color}]{level}[/{level_color}]"
+    )
+
+
+@distraction.command(name="view")
+def view_distractions():
+    """View the existing distractions"""
+    distractions = session.query(Distractions).all()
+
+    if not distractions:
+        console.print("[yellow]No distractions found.[/yellow]")
+        return
+
+    table = Table(
+        show_header=True, header_style="bold cyan", title="List of Distractions"
+    )
+    table.add_column("Name")
+    table.add_column("Description")
+    table.add_column("Path")
+    table.add_column("Level")
+    table.add_column("Created At")
+
+    for d in distractions:
+        # Color-code based on distraction level
+        level_color = (
+            "red"
+            if d.level_of_distraction == DistractionLevel.high
+            else "yellow"
+            if d.level_of_distraction == DistractionLevel.medium
+            else "green"
+        )
+
+        level_formatted = f"[{level_color}]{d.level_of_distraction}[/{level_color}]"
+
+        table.add_row(
+            d.name,
+            d.description or "N/A",
+            d.path,
+            level_formatted,
+            d.create_at.strftime("%Y-%m-%d %H:%M:%S") if d.create_at else "N/A",
+        )
+
+    console.print()
+    console.print(table)
+
+
+@main.group()
+def guild():
+    """
+    Control the task objects.
+
+    This group command aggregates functionality related to managing tasks within
+    the application.
+    """
+
+
+@guild.command(name="quest")
+def create_random_task():
+    """Pick a random open task"""
+
     quest = questManager.get_active_quest()
-
     if quest is None:
-        console.print(
-            "You've never visited the guild before, so you cannot view any quest yet.",
-            style="bold red",
-        )
-        console.print(
-            "Visit the quest store to start viewing and getting quests.",
-            style="bold green",
-        )
+        quest = questManager.generate()
+
+        if not quest:
+            console.print("Damn! raise the github issue!", style="Bold Red")
+        else:
+            console.print(
+                f"Your {quest.name} is this, use view to see more details",
+                style="Bold Cyan",
+            )
+
     else:
-        tasks = session.query(Task).filter(Task.quest_id == quest.id).all()
-
-        console.print(quest.name, style="bold cyan")
-        console.print(f"Status: {quest.status}", style="green", end="      ")
-        time_left = quest.expiry_date - datetime.now()
-        days_left = time_left.days
-        hours_left = time_left.seconds // 3600
         console.print(
-            f"Time remaining: {days_left} days, {hours_left} hours", style="red"
+            f"This time is {quest.name}, use view to see more details",
+            style="Bold Yellow",
         )
-        console.print(f"Path: {quest.path}")
-        console.print()
-
-        table = Table(show_header=True, header_style="bold cyan", title="Quest")
-        table.add_column("ID")
-        table.add_column("Name")
-        table.add_column("Status")
-
-        # Define a mapping of status to style
-        status_color_map = {
-            Status.pending: "yellow",
-            Status.started: "bright_blue",
-            Status.aborted: "bold red",
-            Status.in_progress: "blue",
-            Status.completed: "green",
-            Status.failure: "red",
-        }
-
-        for current_task in tasks:
-            # Apply color based on the status of the current task
-            task_status_color = status_color_map.get(
-                current_task.status, "white"
-            )  # Default to white if no match
-            status_with_color = (
-                f"[{task_status_color}]{current_task.status}[/{task_status_color}]"
-            )
-
-            table.add_row(
-                current_task.id,
-                current_task.name,
-                status_with_color,
-            )
-
-        console.print(table)
 
 
 @guild.group(name="task")

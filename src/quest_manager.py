@@ -10,8 +10,16 @@ from typing import List, Optional
 import uuid
 
 from sqlalchemy import select
-from src.models import Quest, Task, User, Work
-from src.utility import session, Status, QuestStatus, user_id, NotesPath
+from src.models import Quest, Task, User, Work, TaskEvents, Distractions
+from src.utility import (
+    session,
+    Status,
+    QuestStatus,
+    user_id,
+    NotesPath,
+    TaskCategories,
+    EventType,
+)
 
 
 class QuestManager:
@@ -24,7 +32,7 @@ class QuestManager:
         if not os.path.exists(path):
             os.makedirs(path)
 
-    def get_active_quest(self):
+    def get_active_quest(self) -> Optional[Quest]:
         """Get the currently active quest or None if no active quest exists"""
         return session.query(Quest).filter(Quest.status == QuestStatus.active).first()
 
@@ -181,6 +189,136 @@ class QuestManager:
 
         days = random.randint(3, 8)
         return self.create_quest(days_to_complete=days)
+
+    def started_task_of_quest(self, quest: Quest) -> Optional[Task]:
+        task = (
+            session.query(Task)
+            .filter(Task.quest_id == quest.id)
+            .filter(Task.status == Status.started)
+            .first()
+        )
+
+        return task
+
+    def task_event_exist(self) -> Optional[TaskEvents]:
+        try:
+            return (
+                session.query(TaskEvents).order_by(TaskEvents.start_time.desc()).first()
+            )
+        except Exception as e:
+            print(f"Error getting latest task event: {e}")
+            return None
+
+    def add_new_event(
+        self,
+        task: Task,
+        event_type: str,
+        event_category: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> Optional[TaskEvents]:
+        """
+        Add a new event entry for a task, tracking the work or distraction activity.
+        """
+        try:
+            # Generate unique ID
+            event_id: str = str(uuid.uuid4())
+
+            start_time = datetime.now()
+
+            # Validate the event type
+            if event_type not in [EventType.work, EventType.distraction]:
+                raise ValueError(
+                    f"Invalid event type: {event_type}. Must be one of {EventType.__dict__}"
+                )
+
+            # Validate event category based on event type
+            if event_type == EventType.work:
+                # For work events, category should be from TaskCategories
+                if event_category not in [
+                    TaskCategories.visual,
+                    TaskCategories.study,
+                    TaskCategories.diplomatic,
+                    TaskCategories.implementation,
+                ]:
+                    raise ValueError(
+                        f"Invalid task category for work: {event_category}"
+                    )
+
+            elif event_type == EventType.distraction:
+                # For distraction events, validate against the distractions table
+                distraction = (
+                    session.query(Distractions)
+                    .filter(Distractions.name == event_category)
+                    .first()
+                )
+                if not distraction:
+                    distraction = session.query(Distractions).first()
+                    if not distraction:
+                        raise ValueError("No distractions found in the database")
+                    event_category = distraction.name
+
+            # Create and save notes file if notes provided
+            notes_path = None
+            if notes:
+                # Create path for notes based on task and event
+                quest_path = task.quest.path
+                if os.path.exists(quest_path):
+                    with open(quest_path, "a") as f:
+                        f.write(notes)
+
+            # Create the event object
+            new_event = TaskEvents(
+                id=event_id,
+                task_id=task.id,
+                user_id=user_id,  # From utility
+                start_time=start_time,
+                end_time=start_time,
+                event_type=event_type,
+                event_category=event_category,
+                notes=notes_path,
+            )
+
+            # Add to database
+            session.add(new_event)
+            session.commit()
+
+            return new_event
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error adding new event: {str(e)}")
+            return None
+
+    def end_current_event(
+        self, event: TaskEvents, path: str, end_notes: Optional[str] = None
+    ) -> Optional[TaskEvents]:
+        """
+        End an ongoing event by setting its end_time to the current time
+
+        Args:
+            event_id: ID of the event to end
+            end_notes: Optional notes to append about how the event ended
+
+        Returns:
+            The updated TaskEvents object or None if update failed
+        """
+        try:
+            event.end_time = datetime.now()
+
+            # If there are end notes, append them to the existing notes file
+            if end_note != None:
+                with open(path, "a") as f:
+                    f.write(end_notes)
+                    f.write("\n")
+
+                event.notes += f"\n{end_notes}"
+            session.commit()
+            return event
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error ending event: {str(e)}")
+            return None
 
 
 questManager = QuestManager()

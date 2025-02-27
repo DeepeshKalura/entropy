@@ -68,7 +68,9 @@ class Task(Base):
     status = Column(String, nullable=False)
     time_taken = Column(Integer, nullable=False)
     quest_id = Column(String, ForeignKey("quests.id"), nullable=True)
+    work_id = Column(String, ForeignKey("work.id"), nullable=False)
     quest = relationship("Quest", back_populates="tasks")
+    events = relationship("TaskEvents", back_populates="task")
 
 
 class User(Base):
@@ -178,3 +180,45 @@ class Quest(Base):
     updated_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
 
     tasks = relationship("Task", back_populates="quest")
+
+
+class Distractions(Base):
+    """Distractions represent things that take away focus from work/tasks.
+    These could be social media, games, or other non-productive activities
+    that need to be managed to maintain productivity."""
+
+    __tablename__ = "distractions"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    description = Column(Unicode(200))
+    path = Column(String, nullable=False)
+    level_of_distraction = Column(String, nullable=False)
+    create_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    update_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+
+
+class TaskEvents(Base):
+    """
+    Represents events related to tasks, tracking when work happens, distractions occur,
+    and what category of activity is taking place.
+    """
+
+    __tablename__ = "task_events"
+
+    id = Column(String, primary_key=True)
+    task_id = Column(String, ForeignKey("tasks.id"), nullable=False)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=True)
+    event_type = Column(String, nullable=False)  # work | distraction | hobby | etc
+    event_category = Column(
+        String, nullable=True
+    )  # study | coding | knowledge_gain | diplomatic | management
+    notes = Column(Unicode(500), nullable=True)
+    create_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    update_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+
+    # Relationships
+    task = relationship("Task", back_populates="events")
+    user = relationship("User")
