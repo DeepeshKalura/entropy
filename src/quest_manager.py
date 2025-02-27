@@ -257,25 +257,22 @@ class QuestManager:
                         raise ValueError("No distractions found in the database")
                     event_category = distraction.name
 
-            # Create and save notes file if notes provided
-            notes_path = None
             if notes:
-                # Create path for notes based on task and event
                 quest_path = task.quest.path
                 if os.path.exists(quest_path):
                     with open(quest_path, "a") as f:
                         f.write(notes)
+                        f.write("\n")
 
-            # Create the event object
             new_event = TaskEvents(
                 id=event_id,
                 task_id=task.id,
-                user_id=user_id,  # From utility
+                user_id=user_id,  
                 start_time=start_time,
                 end_time=start_time,
                 event_type=event_type,
                 event_category=event_category,
-                notes=notes_path,
+                notes=notes,
             )
 
             # Add to database
