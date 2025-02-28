@@ -551,7 +551,7 @@ def update_work():
                     )
                 else:
                     console.print(
-                        "[bold red]Priority must be between 1 and 5[/bold red]"
+                        "[bold red]Priority must be between 1 and 10[/bold red]"
                     )
             except ValueError:
                 console.print(
@@ -561,7 +561,6 @@ def update_work():
             console.print("[bold red]Invalid work selection[/bold red]")
     except ValueError:
         console.print("[bold red]Please enter a valid work number[/bold red]")
-
 
 @work.command(name="delete")
 @click.argument("name", required=True)
