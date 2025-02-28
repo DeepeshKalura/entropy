@@ -36,5 +36,6 @@ def upgrade() -> None:
     with op.batch_alter_table("distractions") as batch_op:
         batch_op.alter_column("path", nullable=False)
 
+
 def downgrade() -> None:
     op.drop_column("distractions", "path")

@@ -4,6 +4,7 @@ it is the entry points for the cli which is creating with
 `click` package.
 
 """
+
 import os
 import uuid
 from pathlib import Path
@@ -171,12 +172,11 @@ def view_quest():
         minutes_left = (time_left.seconds % 3600) // 60
         seconds_left = time_left.seconds % 60
 
-        if(days_left < 0 ):
+        if days_left < 0:
             questManager.closing_counter(quest=quest)
             console.print("Time's up! The quest has expired.", style="bold red")
-            console.print("Go to guild to get new quest", style="bold green" )
+            console.print("Go to guild to get new quest", style="bold green")
             return
-            
 
         console.print(
             f"Time remaining: {days_left} days, {hours_left} hours, {minutes_left} minutes, {seconds_left} seconds",
@@ -236,7 +236,7 @@ def add_new_event(notes: str):
         )
         return
 
-    last_task_event:Optional[TaskEvents] = questManager.task_event_exist()
+    last_task_event: Optional[TaskEvents] = questManager.task_event_exist()
 
     if last_task_event:
         last_notes = console.input(
@@ -445,6 +445,7 @@ def view_work(filter, sort, desc):
         table = Table(show_header=True, header_style="bold blue", box=ROUNDED)
         table.add_column("Name", style="cyan", width=20)
         table.add_column("Description", style="green", width=40)
+        table.add_column("Priority", style="Bold red", width=3)
         table.add_column("Repository", style="magenta", width=40)
         table.add_column("Created", style="yellow", width=16)
         table.add_column("Updated", style="yellow", width=16)
@@ -484,6 +485,7 @@ def view_work(filter, sort, desc):
             table.add_row(
                 work.name,
                 desc_display or "No description",
+                str(work.priority),
                 repo_display,
                 created,
                 updated,
@@ -504,6 +506,61 @@ def view_work(filter, sort, desc):
     except Exception as e:
         console.print(f"[bold red]Error viewing work items: {e}[/bold red]")
 
+
+@work.command(name="update")
+def update_work():
+    """update priority"""
+
+    works = session.query(Work).all()
+
+    table = Table(show_header=True, header_style="bold blue", box=ROUNDED)
+    table.add_column("S.NO.", style="Bold Cyan", width=10)
+    table.add_column("Name", style="cyan", width=20)
+    table.add_column("Priority", style="Bold red", width=10)
+    table.add_column("created", style="yellow", width=16)
+
+    for i, work in enumerate(works, 1):
+        table.add_row(
+            str(i),
+            work.name,
+            str(work.priority),
+            work.create_at.strftime("%Y-%m-%d %H:%M"),
+        )
+
+    console.print(table)
+
+    selected_work = console.input(
+        "\n[bold green]Enter the S.NO. of work to update priority: [/bold green]"
+    )
+
+    try:
+        selected_idx = int(selected_work) - 1
+        if 0 <= selected_idx < len(works):
+            work = works[selected_idx]
+            new_priority = console.input(
+                "\n[bold green]Enter new priority (1-10): [/bold green]"
+            )
+
+            try:
+                priority = int(new_priority)
+                if 1 <= priority <= 10:
+                    work.priority = priority
+                    session.commit()
+                    console.print(
+                        f"\n[bold green]Successfully updated priority for {work.name}![/bold green]"
+                    )
+                else:
+                    console.print(
+                        "[bold red]Priority must be between 1 and 10[/bold red]"
+                    )
+            except ValueError:
+                console.print(
+                    "[bold red]Please enter a valid number for priority[/bold red]"
+                )
+        else:
+            console.print("[bold red]Invalid work selection[/bold red]")
+    except ValueError:
+        console.print("[bold red]Please enter a valid work number[/bold red]")
 
 @work.command(name="delete")
 @click.argument("name", required=True)
