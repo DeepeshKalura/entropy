@@ -562,6 +562,7 @@ def update_work():
     except ValueError:
         console.print("[bold red]Please enter a valid work number[/bold red]")
 
+
 @work.command(name="delete")
 @click.argument("name", required=True)
 @click.option("--force", "-f", is_flag=True, help="Delete without confirmation")
