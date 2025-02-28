@@ -53,6 +53,7 @@ class Work(Base):
     name = Column(String, nullable=False)
     description = Column(Unicode(200))
     path = Column(String, nullable=False)
+    priority = Column(Integer, nullable=False, default=5)
     repo_url = Column(String, nullable=False)
     create_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
     update_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))

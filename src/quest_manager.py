@@ -9,7 +9,6 @@ import random
 from typing import List, Optional
 import uuid
 
-from sqlalchemy import select
 from src.models import Quest, Task, User, Work, TaskEvents, Distractions
 from src.utility import (
     session,
@@ -85,11 +84,15 @@ class QuestManager:
     def create_tasks_for_quest(self, quest, num_tasks) -> List[Task]:
         """Create specified number of tasks for a quest"""
         created_tasks = []
-        works = session.execute(select(Work)).scalars().all()
+        works = session.query(Work).all()
+
+        weight_work: List[str] = []
+        for work in works:
+            weight_work += [str(work.name)] * work.priority
 
         for _ in range(num_tasks):
-            work = random.choice(works)
-            task_name = self.generate_task_name(work.name)
+            work_name = random.choice(weight_work)
+            task_name = self.generate_task_name(work_name)
             # Create task file
 
             task = Task(
@@ -138,7 +141,9 @@ class QuestManager:
     ):
         """Create the markdown file for the task"""
         self.ensure_directory_exists(os.path.dirname(quest_path))
-        template = self.quest_template( list_work_name=list_of_work, expiry_date=expiry_date)
+        template = self.quest_template(
+            list_work_name=list_of_work, expiry_date=expiry_date
+        )
         with open(quest_path, "w") as f:
             f.write(template)
 
@@ -170,17 +175,17 @@ class QuestManager:
             )
 
             completion_rate = completed_tasks / total_tasks if total_tasks > 0 else 0
-            
+
             users = session.query(User).filter(User.id == user_id).first()
             if completion_rate >= quest.required_completion_rate:
                 quest.status = QuestStatus.completed
                 users.xp += 100
             else:
-                quest.status = QuestStatus.failed 
+                quest.status = QuestStatus.failed
                 users.xp -= 150
 
             session.commit()
-            
+
         except Exception as e:
             session.rollback()
             print(f"Error in closing counter: {str(e)}")
@@ -195,7 +200,9 @@ class QuestManager:
             if current_time <= active_quest.expiry_date:
                 return active_quest
             else:
-                print("your quest time is up, we are sending your request to closing counter")
+                print(
+                    "your quest time is up, we are sending your request to closing counter"
+                )
                 self.closing_counter(active_quest)
 
         days = random.randint(3, 8)
@@ -271,15 +278,14 @@ class QuestManager:
             if notes:
                 quest_path = task.quest.path
                 if os.path.exists(quest_path):
-                    with open(quest_path, "a") as f:
+                    with open(quest_path, "a+") as f:
                         f.write(notes)
                         f.write("\n")
 
-          
             new_event = TaskEvents(
                 id=event_id,
                 task_id=task.id,
-                user_id=user_id,  
+                user_id=user_id,
                 start_time=start_time,
                 end_time=None,
                 event_type=event_type,
@@ -330,5 +336,6 @@ class QuestManager:
             session.rollback()
             print(f"Error ending event: {str(e)}")
             return None
+
 
 questManager = QuestManager()
