@@ -5,33 +5,35 @@ it is the entry points for the cli which is creating with
 
 """
 
-import os
-import uuid
-from pathlib import Path
-import time
-from typing import List, Optional
 import importlib.metadata
+import os
+import time
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional
+
 import click
-from rich.table import Table
+from rich.box import ROUNDED, SIMPLE
 from rich.markdown import Markdown
-from rich.box import SIMPLE, ROUNDED
+from rich.table import Table
 from sqlalchemy import or_
+
 from src.animations_manager import AnimationManager
-from src.models import Task, TaskEvents, User, Work, Distractions
+from src.models import Distractions, Task, TaskEvents, User, Work
+from src.quest_manager import questManager
 from src.utility import (
     DistractionLevel,
+    EventType,
     NotesPath,
     Status,
+    TaskCategories,
     calculate_level,
-    create_progress_bar,
     console,
+    create_progress_bar,
     session,
     user_id,
-    EventType,
-    TaskCategories,
 )
-from src.quest_manager import questManager
-from datetime import datetime
 
 
 def display_welcome_banner(animator: AnimationManager, vers: Optional[str] = None):
@@ -311,6 +313,7 @@ def add_new_event(notes: str):
                     console.print(
                         f"{idx}. {distraction.name} [{level_color}]({distraction.level_of_distraction})[/{level_color}]"
                     )
+                    console.print(f"if none of above then choose: {idx + 1}")
 
                 choice = console.input("\n[bold green]Enter number: [/bold green]")
                 try:
@@ -321,6 +324,19 @@ def add_new_event(notes: str):
                             task=task,
                             event_type=selected_event,
                             event_category=selected_distraction.name,
+                            notes=notes,
+                        )
+                        console.print(
+                            "[bold green]New distraction event has been recorded![/bold green]"
+                        )
+                    elif selected_idx == len(list_of_distraction):
+                        asking_event = console.input(
+                            "\n[bold cyan]Enter Event: [/bold cyan]"
+                        )
+                        questManager.add_new_event(
+                            task=task,
+                            event_type=selected_event,
+                            event_category=asking_event,
                             notes=notes,
                         )
                         console.print(

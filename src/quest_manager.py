@@ -3,21 +3,21 @@ quest is most important feature of the system which gives you
 mission and experience
 """
 
-from datetime import datetime, timedelta
 import os
 import random
-from typing import List, Optional
 import uuid
+from datetime import datetime, timedelta
+from typing import List, Optional
 
-from src.models import Quest, Task, User, Work, TaskEvents, Distractions
+from src.models import Distractions, Quest, Task, TaskEvents, User, Work
 from src.utility import (
-    session,
-    Status,
-    QuestStatus,
-    user_id,
-    NotesPath,
-    TaskCategories,
     EventType,
+    NotesPath,
+    QuestStatus,
+    Status,
+    TaskCategories,
+    session,
+    user_id,
 )
 
 
@@ -270,10 +270,7 @@ class QuestManager:
                     .first()
                 )
                 if not distraction:
-                    distraction = session.query(Distractions).first()
-                    if not distraction:
-                        raise ValueError("No distractions found in the database")
-                    event_category = distraction.name
+                    distraction = event_category
 
             if notes:
                 quest_path = task.quest.path
