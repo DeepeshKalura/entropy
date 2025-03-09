@@ -20,7 +20,7 @@ from rich.table import Table
 from sqlalchemy import or_
 
 from src.animations_manager import AnimationManager
-from src.models import Distractions, Task, TaskEvents, User, Work
+from src.models import Assignment, Distractions, Task, TaskEvents, User, Work
 from src.quest_manager import questManager
 from src.utility import (
     DistractionLevel,
@@ -655,6 +655,225 @@ def delete_work(name, force):
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
 
+
+@admin.group()
+def assignment():
+    """Time dependent task given by the work and higher"""
+
+@assignment.command(name="add")
+@click.argument("name")
+def add_assignment(name: str):
+    """Add a new assignment to a work item"""
+    id = str(uuid.uuid4())
+    description = console.input(
+        f"[bold green]Enter a description for {name}: [/bold green]"
+    )
+    
+    # Display available works for selection
+    works = session.query(Work.id, Work.name, Work.description).all()
+    if not works:
+        console.print("[bold red]Error: No works found. Please create a work first.[/bold red]")
+        return
+    
+    console.print("[bold green]Select a work for this assignment:[/bold green]")
+    for idx, (work_id, work_name, work_desc) in enumerate(works, 1):
+        desc_display = work_desc[:30] + "..." if work_desc and len(work_desc) > 30 else work_desc or "No description"
+        console.print(f"[bold blue]{idx}.[/bold blue] {work_name} - {desc_display}")
+    
+    # Get user selection with validation
+    while True:
+        selection = console.input("[bold green]Enter number: [/bold green]")
+        try:
+            selection_idx = int(selection) - 1
+            if 0 <= selection_idx < len(works):
+                work_id, work_name, _ = works[selection_idx]
+                break
+            else:
+                console.print("[bold red]Invalid selection. Please choose a valid number.[/bold red]")
+        except ValueError:
+            console.print("[bold red]Please enter a valid number.[/bold red]")
+    
+    # Get deadline with validation
+    while True:
+        deadline_str = console.input(
+            "[bold green]Enter deadline (YYYY-MM-DD HH:MM): [/bold green]"
+        )
+        try:
+            deadline = datetime.strptime(deadline_str, "%Y-%m-%d %H:%M")
+            break
+        except ValueError:
+            console.print("[bold red]Invalid date format. Please use YYYY-MM-DD HH:MM[/bold red]")
+    
+    # Status selection
+    status_options = ["pending", "in_progress", "completed", "blocked"]
+    status_index = console.input(
+        "[bold green]Select status:[/bold green]\n" +
+        "\n".join([f"[bold blue]{i}.[/bold blue] {status}" for i, status in enumerate(status_options, 1)]) +
+        "\n[bold green]Enter number (default: 1): [/bold green]"
+    )
+    try:
+        status_index = int(status_index) - 1
+        if status_index < 0 or status_index >= len(status_options):
+            status_index = 0
+    except ValueError:
+        status_index = 0
+    status = status_options[status_index]
+    
+    # Priority selection
+    priority = console.input(
+        "[bold green]Enter priority (1-5, lower is higher priority, default: 3): [/bold green]"
+    )
+    try:
+        priority = int(priority)
+        if priority < 1 or priority > 5:
+            priority = 3
+    except ValueError:
+        priority = 3
+        
+    try:
+        assignment = Assignment(
+            id=id,
+            name=name,
+            description=description,
+            status=status,
+            deadline=deadline,
+            priority=priority,
+            work_id=work_id
+        )
+        
+        session.add(assignment)
+        session.commit()
+        
+        console.print(
+            f"\n[bold green]✓ Assignment '{name}' has been created successfully![/bold green]"
+        )
+        console.print(f"[bold]Details:[/bold]")
+        console.print(f"  [cyan]ID:[/cyan] {id}")
+        console.print(f"  [cyan]Work:[/cyan] {work_name}")
+        console.print(f"  [cyan]Status:[/cyan] {status}")
+        console.print(f"  [cyan]Deadline:[/cyan] {deadline.strftime('%Y-%m-%d %H:%M')}")
+        console.print(f"  [cyan]Priority:[/cyan] {priority}")
+        
+    except Exception as e:
+        session.rollback()
+        console.print(f"[bold red]Error creating assignment: {e}[/bold red]")
+
+
+@assignment.command(name="view")
+@click.option("--filter", "-f", help="Filter assignments by name or description")
+@click.option("--work-id", help="Filter assignments by work ID")
+@click.option(
+    "--sort",
+    "-s",
+    type=click.Choice(["name", "deadline", "priority", "status", "created_at"]),
+    default="deadline",
+    help="Sort assignments by field",
+)
+@click.option("--desc", is_flag=True, help="Sort in descending order")
+@click.option("--status", help="Filter by status (pending, in_progress, completed, blocked)")
+def view_assignments(filter, work_id, sort, desc, status):
+    """View all assignments in a formatted table."""
+    try:
+        query = session.query(Assignment).join(Work)
+        
+        # Apply filters if provided
+        if filter:
+            query = query.filter(
+                or_(
+                    Assignment.name.ilike(f"%{filter}%"),
+                    Assignment.description.ilike(f"%{filter}%"),
+                )
+            )
+        
+        if work_id:
+            query = query.filter(Assignment.work_id == work_id)
+            
+        if status:
+            query = query.filter(Assignment.status == status)
+            
+        # Apply sorting
+        order_column = getattr(Assignment, sort)
+        if desc:
+            query = query.order_by(order_column.desc())
+        else:
+            query = query.order_by(order_column)
+            
+        assignments = query.all()
+        
+        if not assignments:
+            console.print("[yellow]No assignments found.[/yellow]")
+            return
+            
+        # Create a table for assignments
+        table = Table(show_header=True, header_style="bold blue", box=ROUNDED)
+        table.add_column("Name", style="cyan", width=20)
+        table.add_column("Work", style="green", width=15)
+        table.add_column("Description", style="dim", width=30)
+        table.add_column("Status", style="magenta", width=12)
+        table.add_column("Priority", justify="center", width=8)
+        table.add_column("Deadline", style="yellow", width=16)
+        
+        for assignment in assignments:
+            # Get related work name
+            work_name = session.query(Work.name).filter(Work.id == assignment.work_id).scalar() or "Unknown"
+            
+            # Format deadline
+            deadline = assignment.deadline.strftime("%Y-%m-%d %H:%M") if assignment.deadline else "No deadline"
+            
+            # Format priority with emoji indicators
+            priority_display = "❗" * (6 - assignment.priority) if assignment.priority else "❗❗❗"
+            
+            # Format status with color
+            status_styles = {
+                "pending": "[yellow]⏳ Pending[/yellow]",
+                "in_progress": "[blue]🔄 In Progress[/blue]",
+                "completed": "[green]✅ Completed[/green]",
+                "blocked": "[red]❌ Blocked[/red]"
+            }
+            status_display = status_styles.get(assignment.status, assignment.status)
+            
+            # Truncate description if too long
+            desc_display = assignment.description
+            if desc_display and len(desc_display) > 30:
+                desc_display = desc_display[:27] + "..."
+                
+            table.add_row(
+                assignment.name,
+                work_name,
+                desc_display or "No description",
+                status_display,
+                priority_display,
+                deadline
+            )
+            
+        # Add summary and display the table
+        console.print(f"\n[bold green]Assignments[/bold green] - {len(assignments)} total")
+        
+        # Show active filters
+        filters_applied = []
+        if filter:
+            filters_applied.append(f"text: '{filter}'")
+        if work_id:
+            work_name = session.query(Work.name).filter(Work.id == work_id).scalar() or work_id
+            filters_applied.append(f"work: '{work_name}'")
+        if status:
+            filters_applied.append(f"status: {status}")
+            
+        if filters_applied:
+            console.print(f"[italic]Filtered by: {', '.join(filters_applied)}[/italic]")
+            
+        console.print(table)
+        
+        # Add interaction hints
+        console.print(
+            "\n[dim]Tip: Use --filter/-f to search, --work-id to filter by work, --status to filter by status[/dim]"
+        )
+        console.print(
+            "[dim]Example: view-assignments --filter urgent --status pending --sort priority[/dim]\n"
+        )
+        
+    except Exception as e:
+        console.print(f"[bold red]Error viewing assignments: {e}[/bold red]")
 
 @admin.group()
 def distraction():

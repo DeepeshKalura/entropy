@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from src.models import Distractions, Quest, Task, TaskEvents, User, Work
+from src.models import Distractions, Quest, Task, TaskEvents, User, Work, Assignment
 from src.utility import (
     EventType,
     NotesPath,
@@ -82,10 +82,45 @@ class QuestManager:
             return None
 
     def create_tasks_for_quest(self, quest, num_tasks) -> List[Task]:
-        """Create specified number of tasks for a quest"""
+        """Create specified number of tasks for a quest, including one assignment with earliest deadline if available"""
         created_tasks = []
         works = session.query(Work).all()
 
+        # First, try to get the assignment with earliest deadline
+        earliest_assignment = (
+            session.query(Assignment)
+            .filter(Assignment.status != "completed")  # Only non-completed assignments
+            .order_by(Assignment.deadline)  # Sort by deadline ascending
+            .first()
+        )
+        
+        # If we found an assignment, create a task for it and reduce num_tasks by 1
+        if earliest_assignment and num_tasks > 0:
+            # Get the work for this assignment
+            assignment_work = session.query(Work).filter(Work.id == earliest_assignment.work_id).first()
+            
+            if assignment_work:
+                task_name = f"ASSIGNMENT: {earliest_assignment.name} (due: {earliest_assignment.deadline.strftime('%Y-%m-%d')})"
+                
+                task = Task(
+                    id=str(uuid.uuid4()),
+                    quest_id=quest.id,
+                    name=task_name,
+                    status=Status.pending,
+                    time_taken="0",
+                    work_id=assignment_work.id  # Link to the assignment's work
+                )
+                
+                session.add(task)
+                created_tasks.append(task)
+                num_tasks -= 1  
+                
+                # Update the task's description in database to reference this assignment
+                task.description = f"Complete assignment: {earliest_assignment.description}\nID: {earliest_assignment.id}"
+                
+                print(f"Added assignment '{earliest_assignment.name}' to quest as a task")
+        
+        # Create the remaining random tasks as before
         weight_work: List[str] = []
         for work in works:
             weight_work += [str(work.name)] * work.priority
@@ -93,14 +128,17 @@ class QuestManager:
         for _ in range(num_tasks):
             work_name = random.choice(weight_work)
             task_name = self.generate_task_name(work_name)
-            # Create task file
-
+            
+            # Find the corresponding work object
+            work = next((w for w in works if str(w.name) == work_name), None)
+            
             task = Task(
                 id=str(uuid.uuid4()),
                 quest_id=quest.id,
                 name=task_name,
                 status=Status.pending,
                 time_taken="0",
+                work_id=work.id if work else None
             )
 
             session.add(task)
@@ -112,7 +150,7 @@ class QuestManager:
         tags = ""
 
         for work_name in list_work_name:
-            tags += f"[[{work_name.name}]]"
+            tags += f"[[{work_name.work.name}]]"
             tags += ", "
 
         """Create the markdown content for the task"""
@@ -120,15 +158,15 @@ class QuestManager:
         for task in list_work_name:
             task_list += f"- {task.name}\n"
         template = f"""Tags: {tags}
-    **time**: {{date}} {{time}}
-    **Status**: #{QuestStatus.active}
-    **Expiry Date**: {expiry_date.strftime("%Y-%m-%d %H:%M")}
+        **time**: {datetime.now()}
+        **Status**: #{QuestStatus.active}
+        **Expiry Date**: {expiry_date.strftime("%Y-%m-%d %H:%M")}
 
-    ### Choose any one task and complete it to earn 50XP!
+        ### Choose any one task and complete it to earn 50XP!
 
-    ### Task List:
-    {task_list}
-    """
+        ### Task List:
+        {task_list}
+        """
         return template
 
     def generate_task_name(self, work_name) -> str:
