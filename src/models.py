@@ -46,40 +46,30 @@ class WannaBe(Base):
 
 class Work(Base):
     """Work is the thing which you have to do for certain period of time for certain purpose"""
-
     __tablename__ = "work"
-
+    
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     description = Column(Unicode(200))
     path = Column(String, nullable=False)
     priority = Column(Integer, nullable=False, default=5)
     repo_url = Column(String, nullable=False)
-    created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
-    updated_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
-
-    # Add relationship to Assignment
-    assignments = relationship("Assignment", back_populates="work")
-    tasks = relationship("Task", back_populates="work")
+    create_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    update_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
 
 
 class Task(Base):
     """Task is steps to complete the works. In this humans have to put time and effort"""
-
     __tablename__ = "tasks"
+
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     status = Column(String, nullable=False)
     time_taken = Column(Integer, nullable=False)
-    description = Column(Unicode(200), nullable=True)
     quest_id = Column(String, ForeignKey("quests.id"), nullable=True)
     work_id = Column(String, ForeignKey("work.id"), nullable=False)
-    assignment_id = Column(String, ForeignKey("assignments.id"), nullable=True)
     quest = relationship("Quest", back_populates="tasks")
-    work = relationship("Work", back_populates="tasks")
-    assignment = relationship("Assignment", back_populates="tasks")
     events = relationship("TaskEvents", back_populates="task")
-
 
 class User(Base):
     """User is the person who is using this application"""
