@@ -85,7 +85,6 @@ def create_stats_table(
 
 def display_profile(user: User):
     """Displays the user profile with a simplified layout."""
-    console.clear()
 
     # Calculate level and progress
     level, level_progress = calculate_level(user.xp)
@@ -164,7 +163,18 @@ def view_quest():
             style="bold green",
         )
     else:
-        tasks = session.query(Task).filter(Task.quest_id == quest.id).all()
+        tasks = (
+            session.query(Task)
+            .where(Task.quest_id == quest.id)
+            .where(Task.status != Status.started)
+            .all()
+        )
+        current_task = (
+            session.query(Task)
+            .where(Task.quest_id == quest.id)
+            .where(Task.status == Status.started)
+            .first()
+        )
 
         console.print(quest.name, style="bold cyan")
         console.print(f"Status: {quest.status}", style="green", end="      ")
@@ -200,18 +210,23 @@ def view_quest():
             Status.failure: "red",
         }
 
-        for current_task in tasks:
+        console.print(
+            f"Current Task: [bold cyan]{current_task.work.name}[/bold cyan]\n",
+            style="bold",
+        )
+
+        for task in tasks:
             # Apply color based on the status of the current task
             task_status_color = status_color_map.get(
-                current_task.status, "white"
+                task.status, "white"
             )  # Default to white if no match
             status_with_color = (
-                f"[{task_status_color}]{current_task.status}[/{task_status_color}]"
+                f"[{task_status_color}]{task.status}[/{task_status_color}]"
             )
 
             table.add_row(
-                current_task.id,
-                current_task.name,
+                task.id,
+                task.work.name,
                 status_with_color,
             )
 
@@ -425,8 +440,8 @@ def add_work(name: str):
 @click.option(
     "--sort",
     "-s",
-    type=click.Choice(["name", "create_at", "update_at"]),
-    default="create_at",
+    type=click.Choice(["name", "created_at", "updated_at"]),
+    default="created_at",
     help="Sort works by field",
 )
 @click.option("--desc", is_flag=True, help="Sort in descending order")
@@ -469,10 +484,10 @@ def view_work(filter, sort, desc):
         for work in works:
             # Format dates nicely
             created = (
-                work.create_at.strftime("%Y-%m-%d %H:%M") if work.create_at else "N/A"
+                work.created_at.strftime("%Y-%m-%d %H:%M") if work.created_at else "N/A"
             )
             updated = (
-                work.update_at.strftime("%Y-%m-%d %H:%M") if work.update_at else "N/A"
+                work.updated_at.strftime("%Y-%m-%d %H:%M") if work.updated_at else "N/A"
             )
 
             # Extract username/repo from GitHub URL
@@ -540,7 +555,7 @@ def update_work():
             str(i),
             work.name,
             str(work.priority),
-            work.create_at.strftime("%Y-%m-%d %H:%M"),
+            work.created_at.strftime("%Y-%m-%d %H:%M"),
         )
 
     console.print(table)
@@ -606,7 +621,7 @@ def delete_work(name, force):
         console.print(f"  [cyan]Repository:[/cyan] {work.repo_url}")
         console.print(f"  [cyan]File path:[/cyan] {work.path}")
         console.print(
-            f"  [cyan]Created:[/cyan] {work.create_at.strftime('%Y-%m-%d %H:%M') if work.create_at else 'N/A'}"
+            f"  [cyan]Created:[/cyan] {work.created_at.strftime('%Y-%m-%d %H:%M') if work.created_at else 'N/A'}"
         )
 
         # Get confirmation unless force flag is used
@@ -660,6 +675,7 @@ def delete_work(name, force):
 def assignment():
     """Time dependent task given by the work and higher"""
 
+
 @assignment.command(name="add")
 @click.argument("name")
 def add_assignment(name: str):
@@ -668,18 +684,24 @@ def add_assignment(name: str):
     description = console.input(
         f"[bold green]Enter a description for {name}: [/bold green]"
     )
-    
+
     # Display available works for selection
     works = session.query(Work.id, Work.name, Work.description).all()
     if not works:
-        console.print("[bold red]Error: No works found. Please create a work first.[/bold red]")
+        console.print(
+            "[bold red]Error: No works found. Please create a work first.[/bold red]"
+        )
         return
-    
+
     console.print("[bold green]Select a work for this assignment:[/bold green]")
     for idx, (work_id, work_name, work_desc) in enumerate(works, 1):
-        desc_display = work_desc[:30] + "..." if work_desc and len(work_desc) > 30 else work_desc or "No description"
+        desc_display = (
+            work_desc[:30] + "..."
+            if work_desc and len(work_desc) > 30
+            else work_desc or "No description"
+        )
         console.print(f"[bold blue]{idx}.[/bold blue] {work_name} - {desc_display}")
-    
+
     # Get user selection with validation
     while True:
         selection = console.input("[bold green]Enter number: [/bold green]")
@@ -689,10 +711,12 @@ def add_assignment(name: str):
                 work_id, work_name, _ = works[selection_idx]
                 break
             else:
-                console.print("[bold red]Invalid selection. Please choose a valid number.[/bold red]")
+                console.print(
+                    "[bold red]Invalid selection. Please choose a valid number.[/bold red]"
+                )
         except ValueError:
             console.print("[bold red]Please enter a valid number.[/bold red]")
-    
+
     # Get deadline with validation
     while True:
         deadline_str = console.input(
@@ -702,14 +726,21 @@ def add_assignment(name: str):
             deadline = datetime.strptime(deadline_str, "%Y-%m-%d %H:%M")
             break
         except ValueError:
-            console.print("[bold red]Invalid date format. Please use YYYY-MM-DD HH:MM[/bold red]")
-    
+            console.print(
+                "[bold red]Invalid date format. Please use YYYY-MM-DD HH:MM[/bold red]"
+            )
+
     # Status selection
     status_options = ["pending", "in_progress", "completed", "blocked"]
     status_index = console.input(
-        "[bold green]Select status:[/bold green]\n" +
-        "\n".join([f"[bold blue]{i}.[/bold blue] {status}" for i, status in enumerate(status_options, 1)]) +
-        "\n[bold green]Enter number (default: 1): [/bold green]"
+        "[bold green]Select status:[/bold green]\n"
+        + "\n".join(
+            [
+                f"[bold blue]{i}.[/bold blue] {status}"
+                for i, status in enumerate(status_options, 1)
+            ]
+        )
+        + "\n[bold green]Enter number (default: 1): [/bold green]"
     )
     try:
         status_index = int(status_index) - 1
@@ -718,7 +749,7 @@ def add_assignment(name: str):
     except ValueError:
         status_index = 0
     status = status_options[status_index]
-    
+
     # Priority selection
     priority = console.input(
         "[bold green]Enter priority (1-5, lower is higher priority, default: 3): [/bold green]"
@@ -729,7 +760,7 @@ def add_assignment(name: str):
             priority = 3
     except ValueError:
         priority = 3
-        
+
     try:
         assignment = Assignment(
             id=id,
@@ -738,22 +769,22 @@ def add_assignment(name: str):
             status=status,
             deadline=deadline,
             priority=priority,
-            work_id=work_id
+            work_id=work_id,
         )
-        
+
         session.add(assignment)
         session.commit()
-        
+
         console.print(
             f"\n[bold green]✓ Assignment '{name}' has been created successfully![/bold green]"
         )
-        console.print(f"[bold]Details:[/bold]")
+        console.print("[bold]Details:[/bold]")
         console.print(f"  [cyan]ID:[/cyan] {id}")
         console.print(f"  [cyan]Work:[/cyan] {work_name}")
         console.print(f"  [cyan]Status:[/cyan] {status}")
         console.print(f"  [cyan]Deadline:[/cyan] {deadline.strftime('%Y-%m-%d %H:%M')}")
         console.print(f"  [cyan]Priority:[/cyan] {priority}")
-        
+
     except Exception as e:
         session.rollback()
         console.print(f"[bold red]Error creating assignment: {e}[/bold red]")
@@ -770,12 +801,14 @@ def add_assignment(name: str):
     help="Sort assignments by field",
 )
 @click.option("--desc", is_flag=True, help="Sort in descending order")
-@click.option("--status", help="Filter by status (pending, in_progress, completed, blocked)")
+@click.option(
+    "--status", help="Filter by status (pending, in_progress, completed, blocked)"
+)
 def view_assignments(filter, work_id, sort, desc, status):
     """View all assignments in a formatted table."""
     try:
         query = session.query(Assignment).join(Work)
-        
+
         # Apply filters if provided
         if filter:
             query = query.filter(
@@ -784,26 +817,26 @@ def view_assignments(filter, work_id, sort, desc, status):
                     Assignment.description.ilike(f"%{filter}%"),
                 )
             )
-        
+
         if work_id:
             query = query.filter(Assignment.work_id == work_id)
-            
+
         if status:
             query = query.filter(Assignment.status == status)
-            
+
         # Apply sorting
         order_column = getattr(Assignment, sort)
         if desc:
             query = query.order_by(order_column.desc())
         else:
             query = query.order_by(order_column)
-            
+
         assignments = query.all()
-        
+
         if not assignments:
             console.print("[yellow]No assignments found.[/yellow]")
             return
-            
+
         # Create a table for assignments
         table = Table(show_header=True, header_style="bold blue", box=ROUNDED)
         table.add_column("Name", style="cyan", width=20)
@@ -812,58 +845,71 @@ def view_assignments(filter, work_id, sort, desc, status):
         table.add_column("Status", style="magenta", width=12)
         table.add_column("Priority", justify="center", width=8)
         table.add_column("Deadline", style="yellow", width=16)
-        
+
         for assignment in assignments:
             # Get related work name
-            work_name = session.query(Work.name).filter(Work.id == assignment.work_id).scalar() or "Unknown"
-            
+            work_name = (
+                session.query(Work.name).filter(Work.id == assignment.work_id).scalar()
+                or "Unknown"
+            )
+
             # Format deadline
-            deadline = assignment.deadline.strftime("%Y-%m-%d %H:%M") if assignment.deadline else "No deadline"
-            
+            deadline = (
+                assignment.deadline.strftime("%Y-%m-%d %H:%M")
+                if assignment.deadline
+                else "No deadline"
+            )
+
             # Format priority with emoji indicators
-            priority_display = "❗" * (6 - assignment.priority) if assignment.priority else "❗❗❗"
-            
+            priority_display = (
+                "❗" * (6 - assignment.priority) if assignment.priority else "❗❗❗"
+            )
+
             # Format status with color
             status_styles = {
                 "pending": "[yellow]⏳ Pending[/yellow]",
                 "in_progress": "[blue]🔄 In Progress[/blue]",
                 "completed": "[green]✅ Completed[/green]",
-                "blocked": "[red]❌ Blocked[/red]"
+                "blocked": "[red]❌ Blocked[/red]",
             }
             status_display = status_styles.get(assignment.status, assignment.status)
-            
+
             # Truncate description if too long
             desc_display = assignment.description
             if desc_display and len(desc_display) > 30:
                 desc_display = desc_display[:27] + "..."
-                
+
             table.add_row(
                 assignment.name,
                 work_name,
                 desc_display or "No description",
                 status_display,
                 priority_display,
-                deadline
+                deadline,
             )
-            
+
         # Add summary and display the table
-        console.print(f"\n[bold green]Assignments[/bold green] - {len(assignments)} total")
-        
+        console.print(
+            f"\n[bold green]Assignments[/bold green] - {len(assignments)} total"
+        )
+
         # Show active filters
         filters_applied = []
         if filter:
             filters_applied.append(f"text: '{filter}'")
         if work_id:
-            work_name = session.query(Work.name).filter(Work.id == work_id).scalar() or work_id
+            work_name = (
+                session.query(Work.name).filter(Work.id == work_id).scalar() or work_id
+            )
             filters_applied.append(f"work: '{work_name}'")
         if status:
             filters_applied.append(f"status: {status}")
-            
+
         if filters_applied:
             console.print(f"[italic]Filtered by: {', '.join(filters_applied)}[/italic]")
-            
+
         console.print(table)
-        
+
         # Add interaction hints
         console.print(
             "\n[dim]Tip: Use --filter/-f to search, --work-id to filter by work, --status to filter by status[/dim]"
@@ -871,9 +917,10 @@ def view_assignments(filter, work_id, sort, desc, status):
         console.print(
             "[dim]Example: view-assignments --filter urgent --status pending --sort priority[/dim]\n"
         )
-        
+
     except Exception as e:
         console.print(f"[bold red]Error viewing assignments: {e}[/bold red]")
+
 
 @admin.group()
 def distraction():
@@ -963,7 +1010,7 @@ def view_distractions():
             d.description or "N/A",
             d.path,
             level_formatted,
-            d.create_at.strftime("%Y-%m-%d %H:%M:%S") if d.create_at else "N/A",
+            d.created_at.strftime("%Y-%m-%d %H:%M:%S") if d.created_at else "N/A",
         )
 
     console.print()

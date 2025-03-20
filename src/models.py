@@ -46,8 +46,9 @@ class WannaBe(Base):
 
 class Work(Base):
     """Work is the thing which you have to do for certain period of time for certain purpose"""
+
     __tablename__ = "work"
-    
+
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     description = Column(Unicode(200))
@@ -56,7 +57,7 @@ class Work(Base):
     repo_url = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
-    
+
     # Add relationship to Assignment
     assignments = relationship("Assignment", back_populates="work")
     tasks = relationship("Task", back_populates="work")
@@ -64,6 +65,7 @@ class Work(Base):
 
 class Task(Base):
     """Task is steps to complete the works. In this humans have to put time and effort"""
+
     __tablename__ = "tasks"
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
@@ -77,6 +79,7 @@ class Task(Base):
     work = relationship("Work", back_populates="tasks")
     assignment = relationship("Assignment", back_populates="tasks")
     events = relationship("TaskEvents", back_populates="task")
+
 
 class User(Base):
     """User is the person who is using this application"""
@@ -233,17 +236,24 @@ class Assignment(Base):
     """
     Represent the short assignments given by the system
     """
-    __tablename__ = 'assignments'
+
+    __tablename__ = "assignments"
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     description = Column(Unicode(200), nullable=True)
     status = Column(String, nullable=False)
     deadline = Column(DateTime, nullable=False)
     priority = Column(Integer, nullable=False, server_default=text("3"))
-    work_id = Column(String, ForeignKey('work.id'), nullable=False)
-    created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
-    updated_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"),
-                        onupdate=text("CURRENT_TIMESTAMP"), nullable=False)
+    work_id = Column(String, ForeignKey("work.id"), nullable=False)
+    created_at = Column(
+        DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False
+    )
+    updated_at = Column(
+        DateTime,
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+        nullable=False,
+    )
     # Relationship to the Work model and Task model
     work = relationship("Work", back_populates="assignments")
     tasks = relationship("Task", back_populates="assignment")

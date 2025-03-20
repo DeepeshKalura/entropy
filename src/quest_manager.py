@@ -93,33 +93,39 @@ class QuestManager:
             .order_by(Assignment.deadline)  # Sort by deadline ascending
             .first()
         )
-        
+
         # If we found an assignment, create a task for it and reduce num_tasks by 1
         if earliest_assignment and num_tasks > 0:
             # Get the work for this assignment
-            assignment_work = session.query(Work).filter(Work.id == earliest_assignment.work_id).first()
-            
+            assignment_work = (
+                session.query(Work)
+                .filter(Work.id == earliest_assignment.work_id)
+                .first()
+            )
+
             if assignment_work:
                 task_name = f"ASSIGNMENT: {earliest_assignment.name} (due: {earliest_assignment.deadline.strftime('%Y-%m-%d')})"
-                
+
                 task = Task(
                     id=str(uuid.uuid4()),
                     quest_id=quest.id,
                     name=task_name,
                     status=Status.pending,
                     time_taken="0",
-                    work_id=assignment_work.id  # Link to the assignment's work
+                    work_id=assignment_work.id,  # Link to the assignment's work
                 )
-                
+
                 session.add(task)
                 created_tasks.append(task)
-                num_tasks -= 1  
-                
+                num_tasks -= 1
+
                 # Update the task's description in database to reference this assignment
                 task.description = f"Complete assignment: {earliest_assignment.description}\nID: {earliest_assignment.id}"
-                
-                print(f"Added assignment '{earliest_assignment.name}' to quest as a task")
-        
+
+                print(
+                    f"Added assignment '{earliest_assignment.name}' to quest as a task"
+                )
+
         # Create the remaining random tasks as before
         weight_work: List[str] = []
         for work in works:
@@ -128,17 +134,17 @@ class QuestManager:
         for _ in range(num_tasks):
             work_name = random.choice(weight_work)
             task_name = self.generate_task_name(work_name)
-            
+
             # Find the corresponding work object
             work = next((w for w in works if str(w.name) == work_name), None)
-            
+
             task = Task(
                 id=str(uuid.uuid4()),
                 quest_id=quest.id,
                 name=task_name,
                 status=Status.pending,
                 time_taken="0",
-                work_id=work.id if work else None
+                work_id=work.id if work else None,
             )
 
             session.add(task)
